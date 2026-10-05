@@ -22,19 +22,46 @@ void updatePacman(Pacman *pacman)
 
     if (IsKeyPressed(KEY_LEFT) && !IsKeyPressed(KEY_RIGHT)) {
         // left
-        pacman->vel = (Vector2){ -1, 0 };
+        pacman->nextVel = (Vector2){ -1, 0 };
     }
     if (!IsKeyPressed(KEY_LEFT) && IsKeyPressed(KEY_RIGHT)) {
         // right
-        pacman->vel = (Vector2){ 1, 0 };
+        pacman->nextVel = (Vector2){ 1, 0 };
     }
     if (IsKeyPressed(KEY_UP) && !IsKeyPressed(KEY_DOWN)) {
         // up
-        pacman->vel = (Vector2){ 0, -1 };
+        pacman->nextVel = (Vector2){ 0, -1 };
     }
     if (!IsKeyPressed(KEY_UP) && IsKeyPressed(KEY_DOWN)) {
         // down
-        pacman->vel = (Vector2){ 0, 1 };
+        pacman->nextVel = (Vector2){ 0, 1 };
+    }
+
+    if (/* !collisions */ 1) {
+        pacman->vel = pacman->nextVel;
+    }
+
+    // determine which direction pacman is facing
+    if (pacman->vel.x == -1 && pacman->vel.y == 0) {
+        // left
+        pacman->animationState = FACING_LEFT;
+    } else if (pacman->vel.x == 1 && pacman->vel.y == 0) {
+        // right
+        pacman->animationState = FACING_RIGHT;
+    } else if (pacman->vel.x == 0 && pacman->vel.y == -1) {
+        // up
+        pacman->animationState = FACING_UP;
+    } else if (pacman->vel.x == 0 && pacman->vel.y == 1) {
+        // down
+        pacman->animationState = FACING_DOWN;
+    } else {
+        fprintf(
+            stderr,
+            "Invalid pacman velocity: { %.2f, %.2f }\n",
+            pacman->vel.x,
+            pacman->vel.y
+        );
+        exit(EXIT_FAILURE);
     }
 
     nextX = pacman->vel.x + pacman->pos.x;
@@ -52,10 +79,28 @@ void drawPacman(Pacman *pacman)
     switch (pacman->animationState) {
         case IDLE:
             frame = 4;
+            source = (Rectangle){ frame * 16, 0, 16, 16 };
             break;
+        case FACING_LEFT:
+            frame = 2;
+            source = (Rectangle){ frame * 16, 0, -16, 16 };
+            break;
+        case FACING_RIGHT:
+            frame = 2;
+            source = (Rectangle){ frame * 16, 0, 16, 16 };
+            break;
+        case FACING_UP:
+            frame = 3;
+            source = (Rectangle){ frame * 16, 0, 16, -16 };
+            break;
+        case FACING_DOWN:
+            frame = 3;
+            source = (Rectangle){ frame * 16, 0, 16, 16 };
+            break;
+        default:
+            fprintf(stderr, "Invalid pacman->animationState: %i\n", pacman->animationState);
+            exit(EXIT_FAILURE);
     }
-
-    source = (Rectangle){ frame * 16, 0, 16, 16 };
 
     DrawTexturePro(
         pacman->texture,
