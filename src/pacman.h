@@ -17,6 +17,7 @@ typedef struct {
     PacmanAnimationState animationState;
     Vector2 pos;
     Vector2 vel;
+    Vector2 nextVel;
 } Pacman;
 
 Pacman initPacman(Vector2 pos);
