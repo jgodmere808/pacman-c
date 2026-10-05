@@ -1,6 +1,61 @@
 
 #include "ghost.h"
 
+#define GHOST_SPEED 35.0f
+
+static MazeDirection oppositeDirection(MazeDirection direction)
+{
+    switch (direction) {
+        case MAZE_LEFT:  return MAZE_RIGHT;
+        case MAZE_RIGHT: return MAZE_LEFT;
+        case MAZE_UP:    return MAZE_DOWN;
+        case MAZE_DOWN:  return MAZE_UP;
+    }
+
+    return MAZE_LEFT;
+}
+
+static MazePoint ghostCenter(const Ghost *ghost)
+{
+    return (MazePoint){
+        (int)ghost->pos.x + 8,
+        (int)ghost->pos.y + 8
+    };
+}
+
+static void setGhostCenter(Ghost *ghost, MazePoint center)
+{
+    ghost->pos.x = (float)(center.x - 8);
+    ghost->pos.y = (float)(center.y - 8);
+}
+
+/*
+ * The ghost house is not included in mazeTryStep's corridor map.
+ * Move a ghost to the middle of the house, then up to the mapped
+ * corridor at center (112, 116).
+ */
+static void releaseGhost(Ghost *ghost)
+{
+    MazePoint center = ghostCenter(ghost);
+
+    if (center.x < 112) {
+        center.x++;
+        ghost->direction = MAZE_RIGHT;
+    } else if (center.x > 112) {
+        center.x--;
+        ghost->direction = MAZE_LEFT;
+    } else if (center.y > 116) {
+        center.y--;
+        ghost->direction = MAZE_UP;
+    }
+
+    setGhostCenter(ghost, center);
+
+    if (center.x == 112 && center.y == 116) {
+        ghost->inHouse = false;
+    }
+}
+
 Ghost initGhost(GhostName name, Vector2 pos)
 {
     MazeDirection startDirection = (MazeDirection)GetRandomValue(0, 3);
@@ -9,9 +64,10 @@ Ghost initGhost(GhostName name, Vector2 pos)
         .name = name,
         .animationState = GHOST_ANIMATION_NORMAL,
         .animationTimer = 0.0f,
+        .movementAccumulator = 0.0f,
         .pos = pos,
         .direction = startDirection,
-        .requestedDirection = startDirection
+        .inHouse = name != GHOST_BLINKY
     };
 
     // load appropriate texture
@@ -33,9 +89,67 @@ Ghost initGhost(GhostName name, Vector2 pos)
     return ghost;
 }
 
+static void stepGhost(Ghost *ghost)
+{
+    if (ghost->inHouse) {
+        releaseGhost(ghost);
+        return;
+    }
+
+    MazePoint center = ghostCenter(ghost);
+    MazePoint next;
+
+    const MazeDirection directions[] = {
+        MAZE_LEFT, MAZE_RIGHT, MAZE_UP, MAZE_DOWN
+    };
+
+    MazeDirection choices[4];
+    int choiceCount = 0;
+    MazeDirection reverse = oppositeDirection(ghost->direction);
+
+    /*
+     * Gather legal moves, excluding a reversal. In a straight
+     * corridor this leaves one choice; at a junction it leaves
+     * two or three.
+     */
+    for (int i = 0; i < 4; i++) {
+        MazeDirection direction = directions[i];
+
+        if (direction != reverse &&
+            mazeTryStep(center, direction, &next)) {
+            choices[choiceCount++] = direction;
+        }
+    }
+
+    MazeDirection chosen;
+
+    if (choiceCount > 0) {
+        chosen = choices[GetRandomValue(0, choiceCount - 1)];
+    } else {
+        /* A dead end requires turning around. */
+        chosen = reverse;
+
+        if (!mazeTryStep(center, chosen, &next)) {
+            return;
+        }
+    }
+
+    if (!mazeTryStep(center, chosen, &next)) {
+        return;
+    }
+
+    ghost->direction = chosen;
+    setGhostCenter(ghost, next);
+}
+
 void updateGhost(Ghost *ghost)
 {
-    return;
+    ghost->movementAccumulator += GetFrameTime() * GHOST_SPEED;
+
+    while (ghost->movementAccumulator >= 1.0f) {
+        stepGhost(ghost);
+        ghost->movementAccumulator -= 1.0f;
+    }
 }
 
 void drawGhost(Ghost *ghost)
@@ -45,7 +159,6 @@ void drawGhost(Ghost *ghost)
     ghost->animationTimer += GetFrameTime();
     phase = (int)(ghost->animationTimer / 0.2f) % 2;
 
-    directionFrame;
     switch (ghost->direction) {
         case MAZE_RIGHT: directionFrame = 0; break;
         case MAZE_DOWN:  directionFrame = 2; break;

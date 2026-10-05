@@ -22,9 +22,10 @@ typedef struct {
     Texture2D texture;
     GhostAnimationState animationState;
     float animationTimer;
+    float movementAccumulator;
     Vector2 pos;
     MazeDirection direction;
-    MazeDirection requestedDirection;
+    bool inHouse;
 } Ghost;
 
 Ghost initGhost(GhostName name, Vector2 pos);

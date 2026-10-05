@@ -1,7 +1,7 @@
 
 #include "pacman.h"
 
-#define PACMAN_SPEED 20.0f
+#define PACMAN_SPEED 18.0f
 #define PACMAN_ANIMATION_TIME_EATING 0.20f
 
 Pacman initPacman(Vector2 pos)
