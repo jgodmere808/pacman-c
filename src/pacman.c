@@ -2,12 +2,14 @@
 #include "pacman.h"
 
 #define PACMAN_SPEED 20.0f
+#define PACMAN_ANIMATION_TIME_EATING 0.20f
 
 Pacman initPacman(Vector2 pos)
 {
     Pacman pacman = {
         .texture = textureMap.pacman,
         .animationState = IDLE,
+        .animationTimer = 0,
         .pos = pos,
         .vel = (Vector2){ 1, 0 },
         .nextVel = (Vector2){ 1, 0 }
@@ -73,8 +75,14 @@ void updatePacman(Pacman *pacman)
 
 void drawPacman(Pacman *pacman)
 {
-    int frame;
+    int frame, frameIndex;
+    int frameConverter[4];
     Rectangle source;
+
+    pacman->animationTimer += GetFrameTime();
+    while (pacman->animationTimer >= PACMAN_ANIMATION_TIME_EATING) {
+        pacman->animationTimer -= PACMAN_ANIMATION_TIME_EATING;
+    }
 
     switch (pacman->animationState) {
         case IDLE:
@@ -82,19 +90,39 @@ void drawPacman(Pacman *pacman)
             source = (Rectangle){ frame * 16, 0, 16, 16 };
             break;
         case FACING_LEFT:
-            frame = 2;
+            frameConverter[0] = 4;
+            frameConverter[1] = 2;
+            frameConverter[2] = 0;
+            frameConverter[3] = 2;
+            frameIndex = (int)(pacman->animationTimer / (PACMAN_ANIMATION_TIME_EATING / 4)) % 4;
+            frame = frameConverter[frameIndex];
             source = (Rectangle){ frame * 16, 0, -16, 16 };
             break;
         case FACING_RIGHT:
-            frame = 2;
+            frameConverter[0] = 4;
+            frameConverter[1] = 2;
+            frameConverter[2] = 0;
+            frameConverter[3] = 2;
+            frameIndex = (int)(pacman->animationTimer / (PACMAN_ANIMATION_TIME_EATING / 4)) % 4;
+            frame = frameConverter[frameIndex];
             source = (Rectangle){ frame * 16, 0, 16, 16 };
             break;
         case FACING_UP:
-            frame = 3;
+            frameConverter[0] = 4;
+            frameConverter[1] = 3;
+            frameConverter[2] = 1;
+            frameConverter[3] = 3;
+            frameIndex = (int)(pacman->animationTimer / (PACMAN_ANIMATION_TIME_EATING / 4)) % 4;
+            frame = frameConverter[frameIndex];
             source = (Rectangle){ frame * 16, 0, 16, -16 };
             break;
         case FACING_DOWN:
-            frame = 3;
+            frameConverter[0] = 4;
+            frameConverter[1] = 3;
+            frameConverter[2] = 1;
+            frameConverter[3] = 3;
+            frameIndex = (int)(pacman->animationTimer / (PACMAN_ANIMATION_TIME_EATING / 4)) % 4;
+            frame = frameConverter[frameIndex];
             source = (Rectangle){ frame * 16, 0, 16, 16 };
             break;
         default:

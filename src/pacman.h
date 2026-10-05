@@ -15,6 +15,7 @@ typedef enum {
 typedef struct {
     Texture2D texture;
     PacmanAnimationState animationState;
+    float animationTimer;
     Vector2 pos;
     Vector2 vel;
     Vector2 nextVel;
