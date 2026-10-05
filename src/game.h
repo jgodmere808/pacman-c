@@ -6,5 +6,6 @@
 void initGame();
 void endGame();
 void startGame();
+void addScore(int points);
 void updateGame();
 void drawGame();

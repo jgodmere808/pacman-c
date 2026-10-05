@@ -11,6 +11,7 @@ typedef enum {
 typedef struct {
     Sound sounds[MAX_GAME_SOUNDS];
     Texture2D background;
+    int score;
 } Game;
 
 static Game game;
@@ -18,6 +19,8 @@ static Game game;
 void initGame()
 {
     char *path;
+
+    game.score = 0;
 
     // Load Background
     game.background = textureMap.background;
@@ -48,6 +51,11 @@ void startGame()
     PlaySound(game.sounds[SOUND_START]);
 }
 
+void addScore(int points)
+{
+    game.score += points;
+}
+
 void updateGame()
 {
     return;
@@ -63,4 +71,15 @@ void drawGame()
         FACTOR,
         WHITE
     );
+
+
+    // Draw Score
+    const int fontSize = 8 * FACTOR;
+    const char *label = "SCORE";
+    const char *value = TextFormat("%02d", game.score);
+
+    DrawText(label, (SCREEN_WIDTH - MeasureText(label, fontSize)) / 2,
+             2 * FACTOR, fontSize, WHITE);
+    DrawText(value, (SCREEN_WIDTH - MeasureText(value, fontSize)) / 2,
+             13 * FACTOR, fontSize, WHITE);
 }
