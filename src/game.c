@@ -9,6 +9,7 @@ typedef enum {
 } SoundType;
 
 typedef struct {
+    Pacman pacman;
     Sound sounds[MAX_GAME_SOUNDS];
     Music backgroundMusic;
     Texture2D background;
@@ -24,6 +25,7 @@ void initGame()
 
     game.score = 0;
     game.started = false;
+    game.pacman = initPacman((Vector2){ 104, 204 });
 
     // Load Background
     game.background = textureMap.background;
@@ -81,6 +83,8 @@ void updateGame()
     ) {
         PlayMusicStream(game.backgroundMusic);
     }
+
+    updatePacman(&game.pacman);
 }
 
 void drawGame()
@@ -103,4 +107,7 @@ void drawGame()
              2 * FACTOR, fontSize, WHITE);
     DrawText(value, (SCREEN_WIDTH - MeasureText(value, fontSize)) / 2,
              13 * FACTOR, fontSize, WHITE);
+
+    // Draw Pacman
+    drawPacman(&game.pacman);
 }

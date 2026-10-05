@@ -1,4 +1,4 @@
-gcc src/main.c src/game.c src/texture_map.c -o main \
+gcc src/main.c src/game.c src/texture_map.c src/pacman.c -o main \
 -I$(brew --prefix raylib)/include -L$(brew --prefix raylib)/lib -lraylib \
 -framework OpenGL \
 -framework IOKit \
