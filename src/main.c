@@ -38,6 +38,9 @@ int main()
 
     endGame();
 
+    UnloadTexture(textureMap.pacman);
+    UnloadTexture(textureMap.background);
+
     CloseAudioDevice();
 
     CloseWindow();
