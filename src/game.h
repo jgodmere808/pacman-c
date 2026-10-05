@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "ghost.h"
 #include "pacman.h"
 #include "texture_map.h"
 

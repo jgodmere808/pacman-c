@@ -19,6 +19,7 @@ typedef enum {
 
 typedef struct {
     Pacman pacman;
+    Ghost ghosts[4];
     Dots dots;
     Sound sounds[MAX_GAME_SOUNDS];
     Music backgroundMusic;
@@ -52,6 +53,12 @@ void initGame()
     game.state = GAME_PAUSED;
     game.backgroundMusicStarted = false;
     game.pacman = initPacman((Vector2){ 104, 204 });
+
+    // Initialize Ghosts
+    game.ghosts[GHOST_BLINKY] = initGhost(GHOST_BLINKY, (Vector2){ 104, 108 });
+    game.ghosts[GHOST_PINKY]  = initGhost(GHOST_PINKY,  (Vector2){ 104, 132 });
+    game.ghosts[GHOST_INKY]   = initGhost(GHOST_INKY,   (Vector2){ 88,  132 });
+    game.ghosts[GHOST_CLYDE]  = initGhost(GHOST_CLYDE,  (Vector2){ 120, 132 });
 
     initDots(&game.dots);
 
@@ -101,6 +108,8 @@ void addScore(int points)
 
 void updateGame()
 {
+    int i;
+
     // Wait for starting music to complete
     if (game.state == GAME_STARTING && !IsSoundPlaying(game.sounds[SOUND_START])) {
         game.state = GAME_IN_PROGRESS;
@@ -119,6 +128,11 @@ void updateGame()
 
     // game is in progress
     if (game.state == GAME_IN_PROGRESS) {
+        // update ghosts
+        for (i = 0; i < 4; i++) {
+            updateGhost(&game.ghosts[i]);
+        }
+        
         updatePacman(&game.pacman);
 
         MazePoint center = {
@@ -143,6 +157,8 @@ void updateGame()
 
 void drawGame()
 {
+    int i;
+
     // Draw Background
     DrawTextureEx(
         game.background, 
@@ -163,6 +179,11 @@ void drawGame()
              2 * FACTOR, fontSize, WHITE);
     DrawText(value, (SCREEN_WIDTH - MeasureText(value, fontSize)) / 2,
              13 * FACTOR, fontSize, WHITE);
+
+    // Draw ghosts
+    for (i = 0; i < 4; i++) {
+        drawGhost(&game.ghosts[i]);
+    }
 
     // Draw Pacman
     drawPacman(&game.pacman);
