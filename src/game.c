@@ -1,5 +1,6 @@
 
 #include "game.h"
+#include "dots.h"
 
 #define MAX_GAME_SOUNDS 32
 
@@ -11,50 +12,67 @@ typedef enum {
 
 typedef enum {
     SOUND_START,
+    SOUND_EAT_0,
+    SOUND_EAT_1,
     SOUND_COUNT
 } SoundType;
 
 typedef struct {
     Pacman pacman;
+    Dots dots;
     Sound sounds[MAX_GAME_SOUNDS];
     Music backgroundMusic;
     bool backgroundMusicStarted;
     Texture2D background;
     int score;
+    int nextEatSound;
     GameState state;
 } Game;
 
 static Game game;
 
+static Sound loadGameSound(const char *path)
+{
+    Sound sound = LoadSound(path);
+
+    if (!IsSoundValid(sound)) {
+        fprintf(stderr, "failed to load sound: %s\n", path);
+        exit(EXIT_FAILURE);
+    }
+
+    return sound;
+}
+
 void initGame()
 {
-    char *path;
+    char *musicPath = "resources/audio/pacman-arcade-background-music.wav";
 
     game.score = 0;
+    game.nextEatSound = 0;
     game.state = GAME_PAUSED;
     game.backgroundMusicStarted = false;
     game.pacman = initPacman((Vector2){ 104, 204 });
+
+    initDots(&game.dots);
 
     // Load Background
     game.background = textureMap.background;
     SetTextureFilter(game.background, TEXTURE_FILTER_POINT);
 
     // Load Background Music
-    path = "resources/audio/pacman-arcade-background-music.wav";
-    game.backgroundMusic = LoadMusicStream(path);
+    game.backgroundMusic = LoadMusicStream(musicPath);
     if (!IsMusicValid(game.backgroundMusic)) {
-        fprintf(stderr, "failed to load background music: %s\n", path);
+        fprintf(stderr, "failed to load background music: %s\n", musicPath);
         exit(EXIT_FAILURE);
     }
     game.backgroundMusic.looping = true;
 
-    // SOUND_START
-    path = "resources/audio/pacman-arcade-start.wav";
-    game.sounds[SOUND_START] = LoadSound(path);
-    if (!IsSoundValid(game.sounds[SOUND_START])) {
-        fprintf(stderr, "failed to load sound: %s\n", path);
-        exit(EXIT_FAILURE);
-    }
+    game.sounds[SOUND_START] =
+        loadGameSound("resources/audio/pacman-arcade-start.wav");
+    game.sounds[SOUND_EAT_0] =
+        loadGameSound("resources/audio/pacman-arcade-eat-dot-0.wav");
+    game.sounds[SOUND_EAT_1] =
+        loadGameSound("resources/audio/pacman-arcade-eat-dot-1.wav");
 }
 
 void endGame()
@@ -66,12 +84,13 @@ void endGame()
             UnloadSound(game.sounds[i]);
         }
     }
+
+    UnloadMusicStream(game.backgroundMusic);
 }
 
 void startGame()
 {
     PlaySound(game.sounds[SOUND_START]);
-
     game.state = GAME_STARTING;
 }
 
@@ -101,6 +120,24 @@ void updateGame()
     // game is in progress
     if (game.state == GAME_IN_PROGRESS) {
         updatePacman(&game.pacman);
+
+        MazePoint center = {
+            (int)game.pacman.pos.x + 8,
+            (int)game.pacman.pos.y + 8
+        };
+
+        DotType collected = collectDot(&game.dots, center);
+
+        if (collected != DOT_NONE) {
+            addScore(collected == DOT_LARGE ? 50 : 10);
+
+            PlaySound(game.sounds[SOUND_EAT_0 + game.nextEatSound]);
+
+            game.nextEatSound ^= 1;
+
+            /* A large dot can trigger frightened mode here
+               when ghosts are added. */
+        }
     }
 }
 
@@ -114,6 +151,8 @@ void drawGame()
         FACTOR,
         WHITE
     );
+
+    drawDots(&game.dots);
 
     // Draw Score
     const int fontSize = 8 * FACTOR;

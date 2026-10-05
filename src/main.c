@@ -22,7 +22,7 @@ int main()
 
     while (!WindowShouldClose()) {
 
-        if (!gameStarted) {
+        if (!gameStarted && IsKeyPressed(KEY_SPACE)) {
             gameStarted = true;
             startGame();
         }
@@ -33,6 +33,10 @@ int main()
             updateGame();
             drawGame();
 
+        if (!gameStarted) {
+            DrawText("PRESS SPACE TO START", 60, 400, 42, WHITE);
+        }
+
         EndDrawing();
     }
 
@@ -40,6 +44,8 @@ int main()
 
     UnloadTexture(textureMap.pacman);
     UnloadTexture(textureMap.background);
+    UnloadTexture(textureMap.dotSmall);
+    UnloadTexture(textureMap.dotLarge);
 
     CloseAudioDevice();
 
