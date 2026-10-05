@@ -4,6 +4,7 @@
 
 #define DOT_TILE_SIZE 8
 #define DOT_PICKUP_DISTANCE 3
+#define LARGE_DOT_FLASH_SECONDS 0.20
 
 /*
  * Each character represents one 8×8 map tile.
@@ -111,12 +112,15 @@ void drawDots(const Dots *dots)
 {
     DotType type;
     int row, col;
+    bool showLargeDots =
+        ((int)(GetTime() / LARGE_DOT_FLASH_SECONDS) % 2) == 0;
 
     for (row = 0; row < DOT_ROWS; row++) {
         for (col = 0; col < DOT_COLS; col++) {
             type = dots->cells[row][col];
 
-            if (type == DOT_NONE) {
+            if (type == DOT_NONE ||
+                (type == DOT_LARGE && !showLargeDots)) {
                 continue;
             }
 

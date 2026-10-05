@@ -1,5 +1,6 @@
 
 #include "game.h"
+#include "game_audio.h"
 #include "dots.h"
 
 #define STARTING_LIVES 3
@@ -27,8 +28,6 @@ typedef struct {
     Ghost ghosts[4];
     Dots dots;
     Sound sounds[SOUND_COUNT];
-    Music backgroundMusic;
-    bool backgroundMusicStarted;
     Texture2D background;
     int score;
     int lives;
@@ -78,6 +77,8 @@ static bool touchesGhost(const Ghost *ghost)
 /* Resolve lethal overlaps first when Pac-Man touches multiple ghosts. */
 static bool resolveGhostCollisions(void)
 {
+    bool ateGhost = false;
+
     for (int i = 0; i < 4; i++) {
         Ghost *ghost = &game.ghosts[i];
 
@@ -103,6 +104,11 @@ static bool resolveGhostCollisions(void)
         addScore(200 << chainIndex);
         game.frightenedGhostsEaten++;
         ghostStartReturning(ghost);
+        ateGhost = true;
+    }
+
+    if (ateGhost) {
+        playGhostEatenSound();
     }
 
     return false;
@@ -140,13 +146,10 @@ static void updateFrightenedTimer(float deltaTime)
 
 void initGame()
 {
-    const char *musicPath = "resources/audio/pacman-arcade-background-music.wav";
-
     game.score = 0;
     game.lives = STARTING_LIVES;
     game.nextEatSound = 0;
     game.state = GAME_PAUSED;
-    game.backgroundMusicStarted = false;
     resetActors();
 
     initDots(&game.dots);
@@ -155,13 +158,7 @@ void initGame()
     game.background = textureMap.background;
     SetTextureFilter(game.background, TEXTURE_FILTER_POINT);
 
-    // Load Background Music
-    game.backgroundMusic = LoadMusicStream(musicPath);
-    if (!IsMusicValid(game.backgroundMusic)) {
-        fprintf(stderr, "failed to load background music: %s\n", musicPath);
-        exit(EXIT_FAILURE);
-    }
-    game.backgroundMusic.looping = true;
+    initGameAudio();
 
     game.sounds[SOUND_START] =
         loadGameSound("resources/audio/pacman-arcade-start.wav");
@@ -183,7 +180,7 @@ void endGame()
         }
     }
 
-    UnloadMusicStream(game.backgroundMusic);
+    endGameAudio();
 }
 
 void startGame()
@@ -193,8 +190,7 @@ void startGame()
     }
 
     if (game.state == GAME_OVER) {
-        StopMusicStream(game.backgroundMusic);
-        game.backgroundMusicStarted = false;
+        stopGameAudio();
         game.score = 0;
         game.lives = STARTING_LIVES;
         game.nextEatSound = 0;
@@ -229,7 +225,6 @@ void updateGame()
                 game.state = GAME_OVER;
             } else {
                 resetActors();
-                ResumeMusicStream(game.backgroundMusic);
                 game.state = GAME_IN_PROGRESS;
             }
         }
@@ -242,11 +237,6 @@ void updateGame()
 
     float deltaTime = GetFrameTime();
 
-    if (!game.backgroundMusicStarted) {
-        PlayMusicStream(game.backgroundMusic);
-        game.backgroundMusicStarted = true;
-    }
-    UpdateMusicStream(game.backgroundMusic);
     updateFrightenedTimer(deltaTime);
 
     for (int i = 0; i < 4; i++) {
@@ -277,15 +267,36 @@ void updateGame()
         }
     }
 
+    if (collected != DOT_NONE && game.dots.remaining == 0) {
+        stopGameAudio();
+        initDots(&game.dots);
+        resetActors();
+        PlaySound(game.sounds[SOUND_START]);
+        game.state = GAME_STARTING;
+        return;
+    }
+
     if (resolveGhostCollisions()) {
         game.lives--;
         startPacmanDeath(&game.pacman);
         game.state = GAME_DYING;
-        PauseMusicStream(game.backgroundMusic);
+        stopGameAudio();
         StopSound(game.sounds[SOUND_EAT_0]);
         StopSound(game.sounds[SOUND_EAT_1]);
         PlaySound(game.sounds[SOUND_DEATH]);
+        return;
     }
+
+    bool eyesReturning = false;
+
+    for (int i = 0; i < 4; i++) {
+        if (game.ghosts[i].mode == GHOST_EYES_RETURNING) {
+            eyesReturning = true;
+            break;
+        }
+    }
+
+    updateGameAudio(game.frightenedTimeLeft > 0.0f, eyesReturning);
 }
 
 void drawGame()
