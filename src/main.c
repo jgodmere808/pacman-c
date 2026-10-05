@@ -2,6 +2,7 @@
 #include "config.h"
 
 #include "game.h"
+#include "texture_map.h"
 
 int main()
 {
@@ -11,6 +12,8 @@ int main()
     InitWindow(screenWidth, screenHeight, "PACMAN");
 
     InitAudioDevice();
+
+    initTextureMap();
     initGame();
 
     SetTargetFPS(60);
@@ -26,10 +29,15 @@ int main()
 
         BeginDrawing();
             ClearBackground(BLACK);
+
+            updateGame();
+            drawGame();
+
         EndDrawing();
     }
 
     endGame();
+
     CloseAudioDevice();
 
     CloseWindow();

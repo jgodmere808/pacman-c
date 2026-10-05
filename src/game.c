@@ -10,18 +10,25 @@ typedef enum {
 
 typedef struct {
     Sound sounds[MAX_GAME_SOUNDS];
+    Texture2D background;
 } Game;
 
 static Game game;
 
 void initGame()
 {
+    char *path;
+
+    // Load Background
+    game.background = textureMap.background;
+    SetTextureFilter(game.background, TEXTURE_FILTER_POINT);
+
     // SOUND_START
-    char *soundPath = "resources/audio/pacman-arcade-start.ogg";
-    game.sounds[SOUND_START] = LoadSound(soundPath);
+    path = "resources/audio/pacman-arcade-start.ogg";
+    game.sounds[SOUND_START] = LoadSound(path);
     if (!IsSoundValid(game.sounds[SOUND_START])) {
-        fprintf(stderr, "failed to load sound: %s\n", soundPath);
-        exit(1);
+        fprintf(stderr, "failed to load sound: %s\n", path);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -48,5 +55,12 @@ void updateGame()
 
 void drawGame()
 {
-    return;
+    // Draw Background
+    DrawTextureEx(
+        game.background, 
+        (Vector2){ 0, 0 },
+        0.0f,
+        FACTOR,
+        WHITE
+    );
 }
