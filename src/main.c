@@ -1,6 +1,8 @@
 
 #include "config.h"
 
+#include "game.h"
+
 int main()
 {
     const int screenWidth = SCREEN_WIDTH;
@@ -8,13 +10,27 @@ int main()
 
     InitWindow(screenWidth, screenHeight, "PACMAN");
 
-    SetTargetFPS(0);
+    InitAudioDevice();
+    initGame();
+
+    SetTargetFPS(60);
+
+    bool gameStarted = false;
 
     while (!WindowShouldClose()) {
+
+        if (!gameStarted) {
+            gameStarted = true;
+            startGame();
+        }
+
         BeginDrawing();
             ClearBackground(BLACK);
         EndDrawing();
     }
+
+    endGame();
+    CloseAudioDevice();
 
     CloseWindow();
 
