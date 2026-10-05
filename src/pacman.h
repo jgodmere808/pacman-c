@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "texture_map.h"
+#include "maze.h"
 
 typedef enum {
     IDLE,
@@ -17,8 +18,8 @@ typedef struct {
     PacmanAnimationState animationState;
     float animationTimer;
     Vector2 pos;
-    Vector2 vel;
-    Vector2 nextVel;
+    MazeDirection direction;
+    MazeDirection requestedDirection;
 } Pacman;
 
 Pacman initPacman(Vector2 pos);

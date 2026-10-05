@@ -11,8 +11,8 @@ Pacman initPacman(Vector2 pos)
         .animationState = IDLE,
         .animationTimer = 0,
         .pos = pos,
-        .vel = (Vector2){ 1, 0 },
-        .nextVel = (Vector2){ 1, 0 }
+        .direction = MAZE_RIGHT,
+        .requestedDirection = MAZE_RIGHT
     };
 
     return pacman;
@@ -20,57 +20,51 @@ Pacman initPacman(Vector2 pos)
 
 void updatePacman(Pacman *pacman)
 {
-    float nextX, nextY;
-
-    if (IsKeyPressed(KEY_LEFT) && !IsKeyPressed(KEY_RIGHT)) {
-        // left
-        pacman->nextVel = (Vector2){ -1, 0 };
-    }
-    if (!IsKeyPressed(KEY_LEFT) && IsKeyPressed(KEY_RIGHT)) {
-        // right
-        pacman->nextVel = (Vector2){ 1, 0 };
-    }
-    if (IsKeyPressed(KEY_UP) && !IsKeyPressed(KEY_DOWN)) {
-        // up
-        pacman->nextVel = (Vector2){ 0, -1 };
-    }
-    if (!IsKeyPressed(KEY_UP) && IsKeyPressed(KEY_DOWN)) {
-        // down
-        pacman->nextVel = (Vector2){ 0, 1 };
+    if (IsKeyPressed(KEY_LEFT)) {
+        pacman->requestedDirection = MAZE_LEFT;
+    } else if (IsKeyPressed(KEY_RIGHT)) {
+        pacman->requestedDirection = MAZE_RIGHT;
+    } else if (IsKeyPressed(KEY_UP)) {
+        pacman->requestedDirection = MAZE_UP;
+    } else if (IsKeyPressed(KEY_DOWN)) {
+        pacman->requestedDirection = MAZE_DOWN;
     }
 
-    if (/* !collisions */ 1) {
-        pacman->vel = pacman->nextVel;
+    MazePoint center = {
+        (int)pacman->pos.x + 8,
+        (int)pacman->pos.y + 8
+    };
+
+    MazePoint next;
+
+    /*
+     * First try the buffered turn. If it is unavailable, continue
+     * in the current direction. If both fail, stay in place.
+     */
+    if (mazeTryStep(center, pacman->requestedDirection, &next)) {
+        pacman->direction = pacman->requestedDirection;
+    } else if (!mazeTryStep(center, pacman->direction, &next)) {
+        return;
     }
+
+    pacman->pos.x = (float)(next.x - 8);
+    pacman->pos.y = (float)(next.y - 8);
 
     // determine which direction pacman is facing
-    if (pacman->vel.x == -1 && pacman->vel.y == 0) {
-        // left
-        pacman->animationState = FACING_LEFT;
-    } else if (pacman->vel.x == 1 && pacman->vel.y == 0) {
-        // right
-        pacman->animationState = FACING_RIGHT;
-    } else if (pacman->vel.x == 0 && pacman->vel.y == -1) {
-        // up
-        pacman->animationState = FACING_UP;
-    } else if (pacman->vel.x == 0 && pacman->vel.y == 1) {
-        // down
-        pacman->animationState = FACING_DOWN;
-    } else {
-        fprintf(
-            stderr,
-            "Invalid pacman velocity: { %.2f, %.2f }\n",
-            pacman->vel.x,
-            pacman->vel.y
-        );
-        exit(EXIT_FAILURE);
+    switch (pacman->direction) {
+        case MAZE_LEFT:
+            pacman->animationState = FACING_LEFT;
+            break;
+        case MAZE_RIGHT:
+            pacman->animationState = FACING_RIGHT;
+            break;
+        case MAZE_UP:
+            pacman->animationState = FACING_UP;
+            break;
+        case MAZE_DOWN:
+            pacman->animationState = FACING_DOWN;
+            break;
     }
-
-    nextX = pacman->vel.x + pacman->pos.x;
-    nextY = pacman->vel.y + pacman->pos.y;
-
-    // update pacman position
-    pacman->pos = (Vector2){ nextX, nextY };
 }
 
 void drawPacman(Pacman *pacman)
