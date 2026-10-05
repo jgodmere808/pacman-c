@@ -4,6 +4,12 @@
 #define MAX_GAME_SOUNDS 32
 
 typedef enum {
+    GAME_PAUSED,
+    GAME_STARTING,
+    GAME_IN_PROGRESS
+} GameState;
+
+typedef enum {
     SOUND_START,
     SOUND_COUNT
 } SoundType;
@@ -15,7 +21,7 @@ typedef struct {
     bool backgroundMusicStarted;
     Texture2D background;
     int score;
-    bool started;
+    GameState state;
 } Game;
 
 static Game game;
@@ -25,7 +31,7 @@ void initGame()
     char *path;
 
     game.score = 0;
-    game.started = false;
+    game.state = GAME_PAUSED;
     game.backgroundMusicStarted = false;
     game.pacman = initPacman((Vector2){ 104, 204 });
 
@@ -66,7 +72,7 @@ void startGame()
 {
     PlaySound(game.sounds[SOUND_START]);
 
-    game.started = true;
+    game.state = GAME_STARTING;
 }
 
 void addScore(int points)
@@ -76,20 +82,26 @@ void addScore(int points)
 
 void updateGame()
 {
-    if (
-        game.started &&
-        !game.backgroundMusicStarted &&
-        !IsSoundPlaying(game.sounds[SOUND_START])
-    ) {
+    // Wait for starting music to complete
+    if (game.state == GAME_STARTING && !IsSoundPlaying(game.sounds[SOUND_START])) {
+        game.state = GAME_IN_PROGRESS;
+    }
+
+    // Start background music when game begins
+    if (!game.backgroundMusicStarted && game.state == GAME_IN_PROGRESS) {
         PlayMusicStream(game.backgroundMusic);
         game.backgroundMusicStarted = true;
     }
 
-    if (game.backgroundMusicStarted) {
+    // update background music
+    if (game.backgroundMusicStarted && game.state == GAME_IN_PROGRESS) {
         UpdateMusicStream(game.backgroundMusic);
     }
 
-    updatePacman(&game.pacman);
+    // game is in progress
+    if (game.state == GAME_IN_PROGRESS) {
+        updatePacman(&game.pacman);
+    }
 }
 
 void drawGame()
