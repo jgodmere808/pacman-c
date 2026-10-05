@@ -4,6 +4,7 @@
 
 #define STARTING_LIVES 3
 #define COLLISION_DISTANCE 8
+#define FRIGHTENED_SECONDS 6.0f
 
 typedef enum {
     GAME_PAUSED,
@@ -17,8 +18,7 @@ typedef enum {
     SOUND_START,
     SOUND_EAT_0,
     SOUND_EAT_1,
-    SOUND_DEATH_0,
-    SOUND_DEATH_1,
+    SOUND_DEATH,
     SOUND_COUNT
 } SoundType;
 
@@ -29,11 +29,12 @@ typedef struct {
     Sound sounds[SOUND_COUNT];
     Music backgroundMusic;
     bool backgroundMusicStarted;
-    bool deathFinalStarted;
     Texture2D background;
     int score;
     int lives;
     int nextEatSound;
+    int frightenedGhostsEaten;
+    float frightenedTimeLeft;
     GameState state;
 } Game;
 
@@ -53,6 +54,8 @@ static Sound loadGameSound(const char *path)
 
 static void resetActors(void)
 {
+    game.frightenedTimeLeft = 0.0f;
+    game.frightenedGhostsEaten = 0;
     game.pacman = initPacman((Vector2){ 104, 204 });
 
     game.ghosts[GHOST_BLINKY] = initGhost(GHOST_BLINKY, (Vector2){ 104, 108 });
@@ -61,28 +64,78 @@ static void resetActors(void)
     game.ghosts[GHOST_CLYDE]  = initGhost(GHOST_CLYDE,  (Vector2){ 120, 132 });
 }
 
-static bool touchesNormalGhost(void)
+static bool touchesGhost(const Ghost *ghost)
 {
     int pacmanX = (int)game.pacman.pos.x + 8;
     int pacmanY = (int)game.pacman.pos.y + 8;
-    int limitSquared = COLLISION_DISTANCE * COLLISION_DISTANCE;
+    int dx = pacmanX - ((int)ghost->pos.x + 8);
+    int dy = pacmanY - ((int)ghost->pos.y + 8);
 
+    return dx * dx + dy * dy <=
+        COLLISION_DISTANCE * COLLISION_DISTANCE;
+}
+
+/* Resolve lethal overlaps first when Pac-Man touches multiple ghosts. */
+static bool resolveGhostCollisions(void)
+{
     for (int i = 0; i < 4; i++) {
-        const Ghost *ghost = &game.ghosts[i];
+        Ghost *ghost = &game.ghosts[i];
 
-        if (ghost->animationState != GHOST_ANIMATION_NORMAL) {
-            continue;
-        }
-
-        int dx = pacmanX - ((int)ghost->pos.x + 8);
-        int dy = pacmanY - ((int)ghost->pos.y + 8);
-
-        if (dx * dx + dy * dy <= limitSquared) {
+        if (ghost->mode == GHOST_NORMAL && touchesGhost(ghost)) {
             return true;
         }
     }
 
+    for (int i = 0; i < 4; i++) {
+        Ghost *ghost = &game.ghosts[i];
+
+        if (ghost->mode != GHOST_FRIGHTENED ||
+            !touchesGhost(ghost)) {
+            continue;
+        }
+
+        int chainIndex = game.frightenedGhostsEaten;
+
+        if (chainIndex > 3) {
+            chainIndex = 3;
+        }
+
+        addScore(200 << chainIndex);
+        game.frightenedGhostsEaten++;
+        ghostStartReturning(ghost);
+    }
+
     return false;
+}
+
+static void startFrightened(void)
+{
+    game.frightenedTimeLeft = FRIGHTENED_SECONDS;
+    game.frightenedGhostsEaten = 0;
+
+    for (int i = 0; i < 4; i++) {
+        ghostStartFrightened(&game.ghosts[i]);
+    }
+}
+
+static void updateFrightenedTimer(float deltaTime)
+{
+    if (game.frightenedTimeLeft <= 0.0f) {
+        return;
+    }
+
+    game.frightenedTimeLeft -= deltaTime;
+
+    if (game.frightenedTimeLeft > 0.0f) {
+        return;
+    }
+
+    game.frightenedTimeLeft = 0.0f;
+    game.frightenedGhostsEaten = 0;
+
+    for (int i = 0; i < 4; i++) {
+        ghostEndFrightened(&game.ghosts[i]);
+    }
 }
 
 void initGame()
@@ -94,7 +147,6 @@ void initGame()
     game.nextEatSound = 0;
     game.state = GAME_PAUSED;
     game.backgroundMusicStarted = false;
-    game.deathFinalStarted = false;
     resetActors();
 
     initDots(&game.dots);
@@ -117,10 +169,8 @@ void initGame()
         loadGameSound("resources/audio/pacman-arcade-eat-dot-0.wav");
     game.sounds[SOUND_EAT_1] =
         loadGameSound("resources/audio/pacman-arcade-eat-dot-1.wav");
-    game.sounds[SOUND_DEATH_0] =
-        loadGameSound("resources/audio/pacman-arcade-death-0.wav");
-    game.sounds[SOUND_DEATH_1] =
-        loadGameSound("resources/audio/pacman-arcade-death-1.wav");
+    game.sounds[SOUND_DEATH] =
+        loadGameSound("resources/audio/pacman-arcade-death.wav");
 }
 
 void endGame()
@@ -173,14 +223,7 @@ void updateGame()
     if (game.state == GAME_DYING) {
         updatePacman(&game.pacman);
 
-        if (!game.deathFinalStarted &&
-            !IsSoundPlaying(game.sounds[SOUND_DEATH_0])) {
-            PlaySound(game.sounds[SOUND_DEATH_1]);
-            game.deathFinalStarted = true;
-        }
-
-        if (game.deathFinalStarted &&
-            !IsSoundPlaying(game.sounds[SOUND_DEATH_1]) &&
+        if (!IsSoundPlaying(game.sounds[SOUND_DEATH]) &&
             pacmanDeathFinished(&game.pacman)) {
             if (game.lives == 0) {
                 game.state = GAME_OVER;
@@ -197,14 +240,21 @@ void updateGame()
         return;
     }
 
+    float deltaTime = GetFrameTime();
+
     if (!game.backgroundMusicStarted) {
         PlayMusicStream(game.backgroundMusic);
         game.backgroundMusicStarted = true;
     }
     UpdateMusicStream(game.backgroundMusic);
+    updateFrightenedTimer(deltaTime);
 
     for (int i = 0; i < 4; i++) {
-        updateGhost(&game.ghosts[i]);
+        updateGhost(
+            &game.ghosts[i],
+            deltaTime,
+            game.frightenedTimeLeft
+        );
     }
 
     updatePacman(&game.pacman);
@@ -221,18 +271,20 @@ void updateGame()
         PlaySound(game.sounds[SOUND_EAT_0 + game.nextEatSound]);
         game.nextEatSound ^= 1;
 
-        /* Apply future power-pellet effects before checking collisions. */
+        /* Apply the power pellet before checking collisions. */
+        if (collected == DOT_LARGE) {
+            startFrightened();
+        }
     }
 
-    if (touchesNormalGhost()) {
+    if (resolveGhostCollisions()) {
         game.lives--;
         startPacmanDeath(&game.pacman);
         game.state = GAME_DYING;
-        game.deathFinalStarted = false;
         PauseMusicStream(game.backgroundMusic);
         StopSound(game.sounds[SOUND_EAT_0]);
         StopSound(game.sounds[SOUND_EAT_1]);
-        PlaySound(game.sounds[SOUND_DEATH_0]);
+        PlaySound(game.sounds[SOUND_DEATH]);
     }
 }
 
@@ -281,7 +333,7 @@ void drawGame()
 
     if (game.state != GAME_DYING && game.state != GAME_OVER) {
         for (i = 0; i < 4; i++) {
-            drawGhost(&game.ghosts[i]);
+            drawGhost(&game.ghosts[i], game.frightenedTimeLeft);
         }
     }
 

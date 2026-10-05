@@ -12,22 +12,27 @@ typedef enum {
 } GhostName;
 
 typedef enum {
-    GHOST_ANIMATION_NORMAL,
-    GHOST_ANIMATION_EYES,
-    GHOST_ANIMATION_BLINKING
-} GhostAnimationState;
+    GHOST_NORMAL,
+    GHOST_FRIGHTENED,
+    GHOST_EYES_RETURNING,
+    GHOST_REPLENISHING,
+    GHOST_EXITING_HOUSE
+} GhostMode;
 
 typedef struct {
     GhostName name;
     Texture2D texture;
-    GhostAnimationState animationState;
+    GhostMode mode;
     float animationTimer;
     float movementAccumulator;
+    float replenishTimer;
     Vector2 pos;
     MazeDirection direction;
-    bool inHouse;
 } Ghost;
 
 Ghost initGhost(GhostName name, Vector2 pos);
-void updateGhost(Ghost *ghost);
-void drawGhost(Ghost *ghost);
+void ghostStartFrightened(Ghost *ghost);
+void ghostEndFrightened(Ghost *ghost);
+void ghostStartReturning(Ghost *ghost);
+void updateGhost(Ghost *ghost, float deltaTime, float frightenedTimeLeft);
+void drawGhost(const Ghost *ghost, float frightenedTimeLeft);

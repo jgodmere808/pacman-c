@@ -1,7 +1,30 @@
-
 #include "ghost.h"
 
-#define GHOST_SPEED 35.0f
+#include <limits.h>
+
+#define GHOST_NORMAL_SPEED 50.0f
+#define GHOST_FRIGHTENED_SPEED 35.0f
+#define GHOST_EYES_SPEED 100.0f
+#define GHOST_REPLENISH_SECONDS 1.5f
+#define GHOST_FLASH_SECONDS 2.0f
+
+#define HOUSE_ENTRANCE_X 112
+#define HOUSE_ENTRANCE_Y 116
+#define HOUSE_CENTER_Y 140
+
+/* mazeTryStep includes the tunnel from x = -8 to x = 232. */
+#define ROUTE_MIN_X (-8)
+#define ROUTE_MAX_X 232
+#define ROUTE_HEIGHT 288
+#define ROUTE_WIDTH (ROUTE_MAX_X - ROUTE_MIN_X + 1)
+
+static int returnDistance[ROUTE_HEIGHT][ROUTE_WIDTH];
+static MazePoint routeQueue[ROUTE_HEIGHT * ROUTE_WIDTH];
+static bool returnRoutesReady = false;
+
+static const MazeDirection directions[] = {
+    MAZE_LEFT, MAZE_RIGHT, MAZE_UP, MAZE_DOWN
+};
 
 static MazeDirection oppositeDirection(MazeDirection direction)
 {
@@ -29,48 +52,100 @@ static void setGhostCenter(Ghost *ghost, MazePoint center)
     ghost->pos.y = (float)(center.y - 8);
 }
 
-/*
- * The ghost house is not included in mazeTryStep's corridor map.
- * Move a ghost to the middle of the house, then up to the mapped
- * corridor at center (112, 116).
- */
-static void releaseGhost(Ghost *ghost)
+static bool inRouteBounds(MazePoint point)
+{
+    return point.x >= ROUTE_MIN_X &&
+           point.x <= ROUTE_MAX_X &&
+           point.y >= 0 &&
+           point.y < ROUTE_HEIGHT;
+}
+
+static int *distanceAt(MazePoint point)
+{
+    return &returnDistance[point.y][point.x - ROUTE_MIN_X];
+}
+
+/* A single BFS distance map gives every returning ghost a route home. */
+static void buildReturnRoutes(void)
+{
+    for (int y = 0; y < ROUTE_HEIGHT; y++) {
+        for (int x = 0; x < ROUTE_WIDTH; x++) {
+            returnDistance[y][x] = -1;
+        }
+    }
+
+    MazePoint entrance = { HOUSE_ENTRANCE_X, HOUSE_ENTRANCE_Y };
+    int head = 0;
+    int tail = 0;
+
+    *distanceAt(entrance) = 0;
+    routeQueue[tail++] = entrance;
+
+    while (head < tail) {
+        MazePoint current = routeQueue[head++];
+        int currentDistance = *distanceAt(current);
+
+        for (int i = 0; i < 4; i++) {
+            MazePoint next;
+
+            if (!mazeTryStep(current, directions[i], &next) ||
+                !inRouteBounds(next) ||
+                *distanceAt(next) != -1) {
+                continue;
+            }
+
+            *distanceAt(next) = currentDistance + 1;
+            routeQueue[tail++] = next;
+        }
+    }
+
+    returnRoutesReady = true;
+}
+
+/* The house interior is outside mazeTryStep's corridor map. */
+static void releaseGhost(Ghost *ghost, float frightenedTimeLeft)
 {
     MazePoint center = ghostCenter(ghost);
 
-    if (center.x < 112) {
+    if (center.x < HOUSE_ENTRANCE_X) {
         center.x++;
         ghost->direction = MAZE_RIGHT;
-    } else if (center.x > 112) {
+    } else if (center.x > HOUSE_ENTRANCE_X) {
         center.x--;
         ghost->direction = MAZE_LEFT;
-    } else if (center.y > 116) {
+    } else if (center.y > HOUSE_ENTRANCE_Y) {
         center.y--;
         ghost->direction = MAZE_UP;
     }
 
     setGhostCenter(ghost, center);
 
-    if (center.x == 112 && center.y == 116) {
-        ghost->inHouse = false;
+    if (center.x == HOUSE_ENTRANCE_X &&
+        center.y == HOUSE_ENTRANCE_Y) {
+        ghost->mode = frightenedTimeLeft > 0.0f
+            ? GHOST_FRIGHTENED
+            : GHOST_NORMAL;
     }
 }
 
 Ghost initGhost(GhostName name, Vector2 pos)
 {
-    MazeDirection startDirection = (MazeDirection)GetRandomValue(0, 3);
+    if (!returnRoutesReady) {
+        buildReturnRoutes();
+    }
 
     Ghost ghost = {
         .name = name,
-        .animationState = GHOST_ANIMATION_NORMAL,
+        .mode = name == GHOST_BLINKY
+            ? GHOST_NORMAL
+            : GHOST_EXITING_HOUSE,
         .animationTimer = 0.0f,
         .movementAccumulator = 0.0f,
+        .replenishTimer = 0.0f,
         .pos = pos,
-        .direction = startDirection,
-        .inHouse = name != GHOST_BLINKY
+        .direction = (MazeDirection)GetRandomValue(0, 3)
     };
 
-    // load appropriate texture
     switch (name) {
         case GHOST_BLINKY:
             ghost.texture = textureMap.blinky;
@@ -89,29 +164,39 @@ Ghost initGhost(GhostName name, Vector2 pos)
     return ghost;
 }
 
-static void stepGhost(Ghost *ghost)
+void ghostStartFrightened(Ghost *ghost)
 {
-    if (ghost->inHouse) {
-        releaseGhost(ghost);
-        return;
+    if (ghost->mode == GHOST_NORMAL ||
+        ghost->mode == GHOST_FRIGHTENED) {
+        ghost->mode = GHOST_FRIGHTENED;
+        ghost->direction = oppositeDirection(ghost->direction);
+        ghost->animationTimer = 0.0f;
     }
+}
 
+void ghostEndFrightened(Ghost *ghost)
+{
+    if (ghost->mode == GHOST_FRIGHTENED) {
+        ghost->mode = GHOST_NORMAL;
+    }
+}
+
+void ghostStartReturning(Ghost *ghost)
+{
+    if (ghost->mode == GHOST_FRIGHTENED) {
+        ghost->mode = GHOST_EYES_RETURNING;
+        ghost->movementAccumulator = 0.0f;
+    }
+}
+
+static void stepRoaming(Ghost *ghost)
+{
     MazePoint center = ghostCenter(ghost);
     MazePoint next;
-
-    const MazeDirection directions[] = {
-        MAZE_LEFT, MAZE_RIGHT, MAZE_UP, MAZE_DOWN
-    };
-
     MazeDirection choices[4];
     int choiceCount = 0;
     MazeDirection reverse = oppositeDirection(ghost->direction);
 
-    /*
-     * Gather legal moves, excluding a reversal. In a straight
-     * corridor this leaves one choice; at a junction it leaves
-     * two or three.
-     */
     for (int i = 0; i < 4; i++) {
         MazeDirection direction = directions[i];
 
@@ -126,7 +211,6 @@ static void stepGhost(Ghost *ghost)
     if (choiceCount > 0) {
         chosen = choices[GetRandomValue(0, choiceCount - 1)];
     } else {
-        /* A dead end requires turning around. */
         chosen = reverse;
 
         if (!mazeTryStep(center, chosen, &next)) {
@@ -134,30 +218,119 @@ static void stepGhost(Ghost *ghost)
         }
     }
 
-    if (!mazeTryStep(center, chosen, &next)) {
+    if (mazeTryStep(center, chosen, &next)) {
+        ghost->direction = chosen;
+        setGhostCenter(ghost, next);
+    }
+}
+
+static void stepReturning(Ghost *ghost)
+{
+    MazePoint center = ghostCenter(ghost);
+
+    /* Pass through the unmapped house doorway after reaching it. */
+    if (center.x == HOUSE_ENTRANCE_X &&
+        center.y >= HOUSE_ENTRANCE_Y &&
+        center.y < HOUSE_CENTER_Y) {
+        center.y++;
+        ghost->direction = MAZE_DOWN;
+        setGhostCenter(ghost, center);
+
+        if (center.y == HOUSE_CENTER_Y) {
+            ghost->mode = GHOST_REPLENISHING;
+            ghost->replenishTimer = GHOST_REPLENISH_SECONDS;
+            ghost->movementAccumulator = 0.0f;
+        }
+
         return;
     }
 
-    ghost->direction = chosen;
-    setGhostCenter(ghost, next);
-}
+    MazePoint bestNext = center;
+    MazeDirection bestDirection = ghost->direction;
+    int bestDistance = INT_MAX;
 
-void updateGhost(Ghost *ghost)
-{
-    ghost->movementAccumulator += GetFrameTime() * GHOST_SPEED;
+    /* Eyes may reverse direction; take a shortest legal step. */
+    for (int i = 0; i < 4; i++) {
+        MazePoint next;
 
-    while (ghost->movementAccumulator >= 1.0f) {
-        stepGhost(ghost);
-        ghost->movementAccumulator -= 1.0f;
+        if (!mazeTryStep(center, directions[i], &next) ||
+            !inRouteBounds(next)) {
+            continue;
+        }
+
+        int distance = *distanceAt(next);
+
+        if (distance >= 0 && distance < bestDistance) {
+            bestDistance = distance;
+            bestNext = next;
+            bestDirection = directions[i];
+        }
+    }
+
+    if (bestDistance != INT_MAX) {
+        ghost->direction = bestDirection;
+        setGhostCenter(ghost, bestNext);
     }
 }
 
-void drawGhost(Ghost *ghost)
+static void stepGhost(Ghost *ghost, float frightenedTimeLeft)
 {
-    int phase, directionFrame, frame;
+    switch (ghost->mode) {
+        case GHOST_EXITING_HOUSE:
+            releaseGhost(ghost, frightenedTimeLeft);
+            break;
+        case GHOST_EYES_RETURNING:
+            stepReturning(ghost);
+            break;
+        case GHOST_NORMAL:
+        case GHOST_FRIGHTENED:
+            stepRoaming(ghost);
+            break;
+        case GHOST_REPLENISHING:
+            break;
+    }
+}
 
-    ghost->animationTimer += GetFrameTime();
-    phase = (int)(ghost->animationTimer / 0.2f) % 2;
+void updateGhost(Ghost *ghost, float deltaTime, float frightenedTimeLeft)
+{
+    ghost->animationTimer += deltaTime;
+
+    if (ghost->mode == GHOST_REPLENISHING) {
+        ghost->replenishTimer -= deltaTime;
+
+        if (ghost->replenishTimer <= 0.0f) {
+            ghost->replenishTimer = 0.0f;
+            ghost->movementAccumulator = 0.0f;
+            ghost->mode = GHOST_EXITING_HOUSE;
+        }
+
+        return;
+    }
+
+    float speed = GHOST_NORMAL_SPEED;
+
+    if (ghost->mode == GHOST_FRIGHTENED) {
+        speed = GHOST_FRIGHTENED_SPEED;
+    } else if (ghost->mode == GHOST_EYES_RETURNING) {
+        speed = GHOST_EYES_SPEED;
+    }
+
+    ghost->movementAccumulator += deltaTime * speed;
+
+    while (ghost->movementAccumulator >= 1.0f) {
+        ghost->movementAccumulator -= 1.0f;
+        stepGhost(ghost, frightenedTimeLeft);
+
+        if (ghost->mode == GHOST_REPLENISHING) {
+            break;
+        }
+    }
+}
+
+void drawGhost(const Ghost *ghost, float frightenedTimeLeft)
+{
+    int phase = (int)(ghost->animationTimer / 0.2f) % 2;
+    int directionFrame;
 
     switch (ghost->direction) {
         case MAZE_RIGHT: directionFrame = 0; break;
@@ -167,17 +340,16 @@ void drawGhost(Ghost *ghost)
         default:         directionFrame = 0; break;
     }
 
-    switch (ghost->animationState) {
-        case GHOST_ANIMATION_EYES:
-            frame = 12 + directionFrame / 2;
-            break;
-        case GHOST_ANIMATION_BLINKING:
-            frame = 10 + phase;
-            break;
-        case GHOST_ANIMATION_NORMAL:
-        default:
-            frame = directionFrame + phase;
-            break;
+    int frame;
+
+    if (ghost->mode == GHOST_EYES_RETURNING) {
+        frame = 12 + directionFrame / 2;
+    } else if (ghost->mode == GHOST_FRIGHTENED) {
+        frame = frightenedTimeLeft <= GHOST_FLASH_SECONDS
+            ? 10 + phase
+            : 8 + phase;
+    } else {
+        frame = directionFrame + phase;
     }
 
     DrawTexturePro(
