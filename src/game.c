@@ -12,6 +12,7 @@ typedef struct {
     Pacman pacman;
     Sound sounds[MAX_GAME_SOUNDS];
     Music backgroundMusic;
+    bool backgroundMusicStarted;
     Texture2D background;
     int score;
     bool started;
@@ -25,6 +26,7 @@ void initGame()
 
     game.score = 0;
     game.started = false;
+    game.backgroundMusicStarted = false;
     game.pacman = initPacman((Vector2){ 104, 204 });
 
     // Load Background
@@ -74,14 +76,17 @@ void addScore(int points)
 
 void updateGame()
 {
-    UpdateMusicStream(game.backgroundMusic);
-
     if (
         game.started &&
-        !IsSoundPlaying(game.sounds[SOUND_START]) &&
-        !IsMusicStreamPlaying(game.backgroundMusic)
+        !game.backgroundMusicStarted &&
+        !IsSoundPlaying(game.sounds[SOUND_START])
     ) {
         PlayMusicStream(game.backgroundMusic);
+        game.backgroundMusicStarted = true;
+    }
+
+    if (game.backgroundMusicStarted) {
+        UpdateMusicStream(game.backgroundMusic);
     }
 
     updatePacman(&game.pacman);
