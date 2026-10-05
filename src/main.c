@@ -18,24 +18,15 @@ int main()
 
     SetTargetFPS(60);
 
-    bool gameStarted = false;
-
     while (!WindowShouldClose()) {
-
-        if (!gameStarted && IsKeyPressed(KEY_SPACE)) {
-            gameStarted = true;
+        if (IsKeyPressed(KEY_SPACE)) {
             startGame();
         }
 
         BeginDrawing();
-            ClearBackground(BLACK);
-
-            updateGame();
-            drawGame();
-
-        if (!gameStarted) {
-            DrawText("PRESS SPACE TO START", 60, 400, 42, WHITE);
-        }
+        ClearBackground(BLACK);
+        updateGame();
+        drawGame();
 
         EndDrawing();
     }

@@ -24,4 +24,6 @@ typedef struct {
 
 Pacman initPacman(Vector2 pos);
 void updatePacman(Pacman *pacman);
-void drawPacman(Pacman *pacman);
+void startPacmanDeath(Pacman *pacman);
+bool pacmanDeathFinished(const Pacman *pacman);
+void drawPacman(const Pacman *pacman);

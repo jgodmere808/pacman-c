@@ -1,8 +1,10 @@
 
 #include "pacman.h"
 
-#define PACMAN_SPEED 18.0f
 #define PACMAN_ANIMATION_TIME_EATING 0.20f
+#define PACMAN_DEATH_FRAME_TIME 0.10f
+#define PACMAN_DEATH_FIRST_FRAME 5
+#define PACMAN_DEATH_FRAME_COUNT 12
 
 Pacman initPacman(Vector2 pos)
 {
@@ -20,6 +22,16 @@ Pacman initPacman(Vector2 pos)
 
 void updatePacman(Pacman *pacman)
 {
+    pacman->animationTimer += GetFrameTime();
+
+    if (pacman->animationState == DIEING) {
+        return;
+    }
+
+    while (pacman->animationTimer >= PACMAN_ANIMATION_TIME_EATING) {
+        pacman->animationTimer -= PACMAN_ANIMATION_TIME_EATING;
+    }
+
     if (IsKeyPressed(KEY_LEFT)) {
         pacman->requestedDirection = MAZE_LEFT;
     } else if (IsKeyPressed(KEY_RIGHT)) {
@@ -67,16 +79,23 @@ void updatePacman(Pacman *pacman)
     }
 }
 
-void drawPacman(Pacman *pacman)
+void startPacmanDeath(Pacman *pacman)
+{
+    pacman->animationState = DIEING;
+    pacman->animationTimer = 0.0f;
+}
+
+bool pacmanDeathFinished(const Pacman *pacman)
+{
+    return pacman->animationTimer >=
+        PACMAN_DEATH_FRAME_COUNT * PACMAN_DEATH_FRAME_TIME;
+}
+
+void drawPacman(const Pacman *pacman)
 {
     int frame, frameIndex;
     int frameConverter[4];
     Rectangle source;
-
-    pacman->animationTimer += GetFrameTime();
-    while (pacman->animationTimer >= PACMAN_ANIMATION_TIME_EATING) {
-        pacman->animationTimer -= PACMAN_ANIMATION_TIME_EATING;
-    }
 
     switch (pacman->animationState) {
         case IDLE:
@@ -117,6 +136,14 @@ void drawPacman(Pacman *pacman)
             frameConverter[3] = 3;
             frameIndex = (int)(pacman->animationTimer / (PACMAN_ANIMATION_TIME_EATING / 4)) % 4;
             frame = frameConverter[frameIndex];
+            source = (Rectangle){ frame * 16, 0, 16, 16 };
+            break;
+        case DIEING:
+            frame = (int)(pacman->animationTimer / PACMAN_DEATH_FRAME_TIME);
+            if (frame >= PACMAN_DEATH_FRAME_COUNT) {
+                frame = PACMAN_DEATH_FRAME_COUNT - 1;
+            }
+            frame += PACMAN_DEATH_FIRST_FRAME;
             source = (Rectangle){ frame * 16, 0, 16, 16 };
             break;
         default:
